@@ -1,61 +1,109 @@
 package com.example.hakaton.ui.theme.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.example.hakaton.data.Card
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
+import com.example.hakaton.data.Card
+import com.example.hakaton.ui.theme.*
 
-
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CardItem(
     card: Card,
-    onUpdate: (Card) -> Unit
+    onUpdate: (Card) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var showAnswer by remember { mutableStateOf(false) }
-    var showEdit by remember { mutableStateOf(false) }
+    var flipped by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f)
 
-    Box(
-        modifier = Modifier
+    // Основной «корпус» карточки с формой, тенью и фоном
+    Surface(
+        modifier = modifier
             .fillMaxWidth()
-            .padding(8.dp)
-
+            .height(180.dp)
+            .graphicsLayer { rotationY = rotation }
+            .combinedClickable(
+                onClick = { flipped = !flipped },
+                onLongClick = { showDialog = true }
+            ),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 4.dp,
+        color = HakatonTheme.palette.singleTheme
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(if (!showAnswer) card.question else card.answer)
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+        Box(Modifier.fillMaxSize()) {
+            // Контент: вопрос или ответ
+            if (rotation <= 90f) {
                 Text(
-                    text = if (!showAnswer) "Показать ответ" else "Показать вопрос",
-                    modifier = Modifier.clickable { showAnswer = !showAnswer }
+                    text = card.question,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = HakatonTheme.palette.fontColor,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
                 )
-                IconButton(onClick = { showEdit = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Редактировать"
-                    )
-                }
+            } else {
+                Text(
+                    text = card.answer,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = HakatonTheme.palette.fontColor,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .graphicsLayer { rotationY = 180f }
+                        .padding(16.dp)
+                )
             }
+
+            // Индикатор стороны (необязательно)
+            Text(
+                text = if (flipped) "Ответ" else "Вопрос",
+                style = MaterialTheme.typography.labelSmall,
+                color = HakatonTheme.palette.border,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            )
+
+            // Иконка «Edit» вместо отдельной кнопки убрана, по лонгклику открывается меню.
         }
     }
-    if (showEdit) {
-        CardEditDialog(
-            initialCard = card,
-            onDismiss = { showEdit = false },
-            onSave = { updated -> showEdit = false; onUpdate(updated) }
+
+    // Диалог редактирования карточки
+    if (showDialog) {
+        UniversalDialog(
+            title = "Редактировать карточку",
+            fields = listOf(
+                DialogField("question", "Вопрос", DialogFieldType.STRING, card.question),
+                DialogField("answer",   "Ответ",  DialogFieldType.STRING, card.answer),
+                DialogField("timer",    "Таймер", DialogFieldType.BOOLEAN, card.timerEnable),
+                DialogField("interval", "Интервал (сек)", DialogFieldType.STRING, card.intervalSeconds.toString())
+            ),
+            onDismiss = { showDialog = false },
+            onConfirm = { updatedFields ->
+                val q = updatedFields.first { it.key == "question" }.initialValue as String
+                val a = updatedFields.first { it.key == "answer"   }.initialValue as String
+                val t = updatedFields.first { it.key == "timer"    }.initialValue as Boolean
+                val i = updatedFields.first { it.key == "interval" }.initialValue.toString().toIntOrNull() ?: card.intervalSeconds
+
+                onUpdate(card.copy(
+                    question       = q,
+                    answer         = a,
+                    timerEnable    = t,
+                    intervalSeconds = i
+                ))
+                showDialog = false
+            }
         )
     }
 }

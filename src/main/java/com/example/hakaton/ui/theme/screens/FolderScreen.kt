@@ -1,48 +1,115 @@
 package com.example.hakaton.ui.theme.screens
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
 import com.example.hakaton.data.Folder
+import com.example.hakaton.ui.theme.DialogField
+import com.example.hakaton.ui.theme.DialogFieldType
+import com.example.hakaton.ui.theme.UniversalDialog
+import com.example.hakaton.ui.theme.components.CardCrudMenu
+import com.example.hakaton.ui.theme.view_model.MainViewModel
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun FoldersScreen(navController: NavHostController) {
-    val folders = remember {
-        listOf(
-            Folder(1, "Колода 1"),
-            Folder(2, "История"),
-            Folder(3, "Наука")
-        )
-    }
-    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(folders) { folder ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { navController.navigate("cards/${folder.id}") }
-                ) {
-                    Text(folder.name, modifier = Modifier.padding(16.dp))
-                }
+fun FoldersScreen(
+    viewModel: MainViewModel,
+    onFolderClick: (Int) -> Unit
+) {
+    val folders by viewModel.folders.collectAsState()
+    var menuFor by remember { mutableStateOf<Folder?>(null) }
+    var editFolder by remember { mutableStateOf<Folder?>(null) }
+    var isNew by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) { viewModel.loadFolders() }
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                editFolder = Folder(id = 0, name = "")
+                isNew = true
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Добавить папку")
             }
         }
-        Button(
-            onClick = { /* TODO */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
-        ) {
-            Text("Добавить папку")
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            if (folders.isEmpty()) {
+                Text("Папок ещё нет", Modifier.align(Alignment.Center))
+            } else {
+                LazyVerticalGrid(
+                    columns            = GridCells.Fixed(2),
+                    contentPadding     = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement   = Arrangement.spacedBy(8.dp),
+                    modifier           = Modifier.fillMaxSize()
+                ) {
+                    items(folders, key = { it.id }) { folder ->
+                        Card(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .combinedClickable(
+                                    onClick    = { onFolderClick(folder.id) },
+                                    onLongClick= { menuFor = folder }
+                                ),
+                            shape  = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            )
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    folder.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                        CardCrudMenu(
+                            expanded = menuFor == folder,
+                            onDismiss= { menuFor = null },
+                            onEdit   = {
+                                editFolder = folder
+                                isNew = false
+                            },
+                            onDelete = {
+                                viewModel.deleteFolder(folder.id)
+                                menuFor = null
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Диалог новая/переименование
+            editFolder?.let { f ->
+                UniversalDialog(
+                    title   = if (isNew) "Новая папка" else "Переименовать папку",
+                    fields  = listOf(DialogField("name","Название",DialogFieldType.STRING,f.name)),
+                    onDismiss = { editFolder = null },
+                    onConfirm = { fields ->
+                        val name = (fields.first().initialValue as String).trim()
+                        if (name.isNotEmpty()) {
+                            if (isNew) viewModel.addFolder(name)
+                            else        viewModel.renameFolder(f.id, name)
+                        }
+                        editFolder = null
+                        menuFor = null
+                    }
+                )
+            }
         }
     }
 }

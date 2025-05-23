@@ -4,18 +4,36 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
-import kotlin.jvm.java
+import com.example.hakaton.utils.OverlayReceiver
 
 fun scheduleOverlay(context: Context, folderIds: IntArray, delaySec: Long) {
-    val am = context.getSystemService<AlarmManager>()!!
-    val intent = Intent(context, OverlayReceiver::class.javaClass).apply {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val intent = Intent(context, OverlayReceiver::class.java).apply {
         putExtra("folderIds", folderIds)
     }
-    val pi = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
-    am.setExactAndAllowWhileIdle(
-        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-        SystemClock.elapsedRealtime() + delaySec * 1000,
-        pi
+
+    val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        0,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
+
+    val triggerAt = SystemClock.elapsedRealtime() + delaySec * 1000L
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            triggerAt,
+            pendingIntent
+        )
+    } else {
+        alarmManager.setExact(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            triggerAt,
+            pendingIntent
+        )
+    }
 }

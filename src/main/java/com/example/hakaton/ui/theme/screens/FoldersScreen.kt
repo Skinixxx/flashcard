@@ -40,24 +40,28 @@ fun FoldersScreen(
         viewModel.loadFolders()
     }
 
-    // Отфильтрованный список
+    // отфильтрованный список
     val folders = remember(allFolders, query) {
         if (query.isBlank()) allFolders
-        else allFolders.filter { it.name.contains(query.trim(), ignoreCase = true) }
+        else allFolders.filter {
+            it.name.contains(query.trim(), ignoreCase = true)
+        }
+    }
+
+    // nullable-слот навигационной иконки
+    val navIcon: (@Composable () -> Unit)? = onBack?.let { back ->
+        @Composable {
+            IconButton(onClick = back) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+            }
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { "Папки" },
-                // Вот так возвращаем @Composable (() -> Unit)?
-                navigationIcon = if (onBack != null) {
-                    @Composable {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-                        }
-                    }
-                } else null
+                navigationIcon = navIcon
             )
         },
         floatingActionButton = {
@@ -70,7 +74,7 @@ fun FoldersScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
@@ -124,7 +128,6 @@ fun FoldersScreen(
                                 )
                             }
                         }
-
                         CardCrudMenu(
                             expanded = menuFor == folder,
                             onDismiss = { menuFor = null },
@@ -142,11 +145,12 @@ fun FoldersScreen(
             }
         }
 
-        // Диалог создания / переименования
         editFolder?.let { f ->
             UniversalDialog(
                 title = if (isNew) "Новая папка" else "Переименовать папку",
-                fields = listOf(DialogField("name", "Название", DialogFieldType.STRING, f.name)),
+                fields = listOf(
+                    DialogField("name", "Название", DialogFieldType.STRING, f.name)
+                ),
                 onDismiss = { editFolder = null },
                 onConfirm = { fields ->
                     val name = (fields.first { it.key == "name" }.initialValue as String).trim()

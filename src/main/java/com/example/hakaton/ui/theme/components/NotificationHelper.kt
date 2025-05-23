@@ -29,17 +29,19 @@ object NotificationHelper {
     }
 
     fun sendReminder(context: Context, notificationId: Int) {
-        // Интент на OverlayActivity
+        // собираем Intent на OverlayActivity
         val intent = Intent(context, OverlayActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pi = PendingIntent.getActivity(
-            context, notificationId, intent,
+            context,
+            notificationId,
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val notif = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_settings)       // ваш ресурс
+            .setSmallIcon(R.drawable.ic_launcher_foreground)  // замените на свой значок
             .setContentTitle("Время повторить карточки!")
             .setContentText("Нажмите, чтобы начать обзор.")
             .setContentIntent(pi)

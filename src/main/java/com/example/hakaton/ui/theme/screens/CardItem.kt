@@ -3,15 +3,19 @@ package com.example.hakaton.ui.theme.screens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.example.hakaton.data.Card
@@ -22,13 +26,22 @@ import com.example.hakaton.ui.theme.*
 fun CardItem(
     card: Card,
     onUpdate: (Card) -> Unit,
+    onDelete: (Card) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var flipped by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var editCard by remember { mutableStateOf<Card?>(null) }
     val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f)
 
-    // Основной «корпус» карточки с формой, тенью и фоном
+    // Градиент для фона карточки
+    val bgBrush = Brush.verticalGradient(
+        colors = listOf(
+            HakatonTheme.palette.mainColor,
+            HakatonTheme.palette.singleTheme
+        )
+    )
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -36,14 +49,17 @@ fun CardItem(
             .graphicsLayer { rotationY = rotation }
             .combinedClickable(
                 onClick = { flipped = !flipped },
-                onLongClick = { showDialog = true }
+                onLongClick = { menuExpanded = true }
             ),
         shape = RoundedCornerShape(16.dp),
         tonalElevation = 4.dp,
-        color = HakatonTheme.palette.singleTheme
+        color = Color.Transparent
     ) {
-        Box(Modifier.fillMaxSize()) {
-            // Контент: вопрос или ответ
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(bgBrush)
+        ) {
             if (rotation <= 90f) {
                 Text(
                     text = card.question,
@@ -65,7 +81,6 @@ fun CardItem(
                 )
             }
 
-            // Индикатор стороны (необязательно)
             Text(
                 text = if (flipped) "Ответ" else "Вопрос",
                 style = MaterialTheme.typography.labelSmall,
@@ -75,35 +90,65 @@ fun CardItem(
                     .padding(8.dp)
             )
 
-            // Иконка «Edit» вместо отдельной кнопки убрана, по лонгклику открывается меню.
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Menu",
+                tint = HakatonTheme.palette.fontColor,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .clickable { menuExpanded = true }
+            )
         }
     }
 
+    // Контекстное меню
+    DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false }
+    ) {
+        DropdownMenuItem(
+            text = { Text("Изменить") },
+            onClick = {
+                menuExpanded = false
+                editCard = card      // показываем диалог ниже
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Удалить") },
+            onClick = {
+                menuExpanded = false
+                onDelete(card)
+            }
+        )
+    }
+
     // Диалог редактирования карточки
-    if (showDialog) {
+    editCard?.let { c ->
         UniversalDialog(
             title = "Редактировать карточку",
             fields = listOf(
-                DialogField("question", "Вопрос", DialogFieldType.STRING, card.question),
-                DialogField("answer",   "Ответ",  DialogFieldType.STRING, card.answer),
-                DialogField("timer",    "Таймер", DialogFieldType.BOOLEAN, card.timerEnable),
-                DialogField("interval", "Интервал (сек)", DialogFieldType.STRING, card.intervalSeconds.toString())
+                DialogField("q", "Вопрос",   DialogFieldType.STRING,  c.question),
+                DialogField("a", "Ответ",     DialogFieldType.STRING,  c.answer),
+                DialogField("t", "Таймер",    DialogFieldType.BOOLEAN, c.timerEnable),
+                DialogField("i", "Интервал",  DialogFieldType.TIME,    c.intervalSeconds)
             ),
-            onDismiss = { showDialog = false },
-            onConfirm = { updatedFields ->
-                val q = updatedFields.first { it.key == "question" }.initialValue as String
-                val a = updatedFields.first { it.key == "answer"   }.initialValue as String
-                val t = updatedFields.first { it.key == "timer"    }.initialValue as Boolean
-                val i = updatedFields.first { it.key == "interval" }.initialValue.toString().toIntOrNull() ?: card.intervalSeconds
-
-                onUpdate(card.copy(
+            onDismiss = { editCard = null },
+            onConfirm = { fields ->
+                val q = fields.first { it.key == "q" }.initialValue as String
+                val a = fields.first { it.key == "a" }.initialValue as String
+                val t = fields.first { it.key == "t" }.initialValue as Boolean
+                val i = fields.first { it.key == "i" }.initialValue as Int
+                onUpdate(c.copy(
                     question       = q,
                     answer         = a,
                     timerEnable    = t,
-                    intervalSeconds = i
+                    intervalSeconds= i
                 ))
-                showDialog = false
+                editCard = null
             }
         )
     }
 }
+
+

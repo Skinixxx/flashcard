@@ -1,30 +1,38 @@
+// SplashScreen.kt
 package com.example.hakaton.ui.theme.screens
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
-import com.example.hakaton.R
 import com.example.hakaton.ui.theme.LightBackgroundGradient
 import kotlinx.coroutines.delay
 
+/**
+ * @param onTimeout вызывать переход на следующий экран (Register)
+ */
 @Composable
-fun SplashScreen(navController: NavHostController) {
-    // для анимации прозрачности
-    val infiniteTransition = rememberInfiniteTransition()
-    val alpha by infiniteTransition.animateFloat(
+fun SplashScreen(onTimeout: () -> Unit) {
+    val transition = rememberInfiniteTransition()
+    val alpha by transition.animateFloat(
         initialValue = 0.3f,
-        targetValue = 1f,
+        targetValue  = 1f,
         animationSpec = infiniteRepeatable(
-            tween(1200, easing = FastOutSlowInEasing),
+            animation = androidx.compose.animation.core.tween(
+                durationMillis = 1200,
+                easing         = FastOutSlowInEasing
+            ),
             repeatMode = RepeatMode.Reverse
         )
     )
@@ -35,25 +43,11 @@ fun SplashScreen(navController: NavHostController) {
             .background(LightBackgroundGradient),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Логотип приложения
-
-            // Пульсирующий индикатор
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(48.dp)
-                    .alpha(alpha)
-            )
-        }
+        CircularProgressIndicator(modifier = Modifier.alpha(alpha))
     }
 
-    // Ждём 1.5 секунды и переходим на регистрацию
     LaunchedEffect(Unit) {
         delay(1500)
-        navController.navigate("register") {
-            popUpTo("splash") { inclusive = true }
-        }
+        onTimeout()
     }
 }

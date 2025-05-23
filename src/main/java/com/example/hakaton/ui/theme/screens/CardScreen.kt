@@ -1,4 +1,3 @@
-// CardsScreen.kt
 package com.example.hakaton.ui.theme.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,15 +26,19 @@ fun CardsScreen(
     folderId: Int,
     viewModel: MainViewModel
 ) {
+    // Состояние списка карточек
     val cards by viewModel.cards.collectAsState()
+    // Для контекстного меню и диалога
     var menuFor by remember { mutableStateOf<Card?>(null) }
     var editCard by remember { mutableStateOf<Card?>(null) }
     var isNew by remember { mutableStateOf(false) }
 
+    // Загрузка при смене folderId
     LaunchedEffect(folderId) {
         viewModel.loadCards(folderId)
     }
 
+    // Список
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -52,45 +55,52 @@ fun CardsScreen(
                 )
             }
         }
-        items(cards) { c ->
-            Box {
-                M3Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .combinedClickable(
-                            onClick = { /* flip внутри CardItem, если нужно */ },
-                            onLongClick = { menuFor = c }
-                        ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(c.question, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
 
-                CardCrudMenu(
-                    expanded = menuFor == c,
-                    onDismiss = { menuFor = null },
-                    onEdit = {
-                        editCard = c
-                        isNew = false
-                    },
-                    onDelete = {
-                        viewModel.deleteCard(c)
-                        menuFor = null
-                    }
+        items(cards) { card ->
+            // каждую карточку можно флипнуть и вызвать меню долгим тапом
+            var flipped by remember(card.id) { mutableStateOf(false) }
+
+            M3Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .combinedClickable(
+                        onClick = { flipped = !flipped },
+                        onLongClick = { menuFor = card }
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
+            ) {
+                Box(Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (!flipped) card.question else card.answer,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
+
+            // Контекстное меню «Изменить/Удалить»
+            CardCrudMenu(
+                expanded = menuFor == card,
+                onDismiss = { menuFor = null },
+                onEdit = {
+                    editCard = card
+                    isNew = false
+                },
+                onDelete = {
+                    viewModel.deleteCard(card)
+                    menuFor = null
+                }
+            )
         }
     }
 
+    // Кнопка «Добавить карточку»
     Button(
         onClick = {
             editCard = Card(
-                id = 1,
+                id = 0,
                 folderId = folderId,
                 question = "",
                 answer = "",
@@ -106,14 +116,14 @@ fun CardsScreen(
         Text("Добавить карточку")
     }
 
+    // Диалог создания/редактирования
     editCard?.let { c ->
         UniversalDialog(
             title = if (isNew) "Новая карточка" else "Редактировать карточку",
             fields = listOf(
                 DialogField("q", "Вопрос", DialogFieldType.STRING, c.question),
-                DialogField("a", "Ответ",   DialogFieldType.STRING, c.answer),
-                DialogField("t", "Таймер",  DialogFieldType.BOOLEAN, c.timerEnable),
-                // Для простоты времени используем STRING и храним секунды как строку
+                DialogField("a", "Ответ", DialogFieldType.STRING, c.answer),
+                DialogField("t", "Таймер", DialogFieldType.BOOLEAN, c.timerEnable),
                 DialogField("i", "Интервал (сек)", DialogFieldType.STRING, c.intervalSeconds.toString())
             ),
             onDismiss = { editCard = null },
@@ -122,12 +132,9 @@ fun CardsScreen(
                 val a = fields.first { it.key == "a" }.initialValue as String
                 val t = fields.first { it.key == "t" }.initialValue as Boolean
                 val i = (fields.first { it.key == "i" }.initialValue as String)
-                    .toIntOrNull().let { it ?: c.intervalSeconds }
+                    .toIntOrNull() ?: c.intervalSeconds
 
-                val newId = if (isNew) {
-                    (cards.maxOfOrNull { it.id } ?: 0) + 1
-                } else c.id
-
+                val newId = if (isNew) (cards.maxOfOrNull { it.id } ?: 0) + 1 else c.id
                 val newCard = c.copy(
                     id = newId,
                     question = q,
@@ -137,7 +144,7 @@ fun CardsScreen(
                 )
 
                 if (isNew) viewModel.addCard(newCard)
-                else        viewModel.updateCard(newCard)
+                else viewModel.updateCard(newCard)
 
                 editCard = null
                 menuFor = null

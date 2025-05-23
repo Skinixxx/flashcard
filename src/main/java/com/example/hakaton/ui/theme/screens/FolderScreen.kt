@@ -3,19 +3,16 @@ package com.example.hakaton.ui.theme.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.hakaton.data.Folder
+import com.example.hakaton.data.Card
 import com.example.hakaton.ui.theme.DialogField
 import com.example.hakaton.ui.theme.DialogFieldType
 import com.example.hakaton.ui.theme.UniversalDialog
@@ -24,92 +21,144 @@ import com.example.hakaton.ui.theme.view_model.MainViewModel
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun FoldersScreen(
+fun FolderScreen(
+    folderId: Int,
     viewModel: MainViewModel,
-    onFolderClick: (Int) -> Unit
+    onBack: () -> Unit,
+    onBlitz: () -> Unit
 ) {
-    val folders by viewModel.folders.collectAsState()
-    var menuFor by remember { mutableStateOf<Folder?>(null) }
-    var editFolder by remember { mutableStateOf<Folder?>(null) }
+    // Список карточек в этой папке
+    val cards by viewModel.cards.collectAsState()
+    var menuFor by remember { mutableStateOf<Card?>(null) }
+    var editCard by remember { mutableStateOf<Card?>(null) }
     var isNew by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { viewModel.loadFolders() }
+    // Загружаем при заходе
+    LaunchedEffect(folderId) {
+        viewModel.loadCards(folderId)
+    }
 
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                editFolder = Folder(id = 0, name = "")
-                isNew = true
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить папку")
-            }
-        }
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            if (folders.isEmpty()) {
-                Text("Папок ещё нет", Modifier.align(Alignment.Center))
-            } else {
-                LazyVerticalGrid(
-                    columns            = GridCells.Fixed(2),
-                    contentPadding     = PaddingValues(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement   = Arrangement.spacedBy(8.dp),
-                    modifier           = Modifier.fillMaxSize()
-                ) {
-                    items(folders, key = { it.id }) { folder ->
-                        Card(
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .combinedClickable(
-                                    onClick    = { onFolderClick(folder.id) },
-                                    onLongClick= { menuFor = folder }
-                                ),
-                            shape  = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
-                        ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(
-                                    folder.name,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                        }
-                        CardCrudMenu(
-                            expanded = menuFor == folder,
-                            onDismiss= { menuFor = null },
-                            onEdit   = {
-                                editFolder = folder
-                                isNew = false
-                            },
-                            onDelete = {
-                                viewModel.deleteFolder(folder.id)
-                                menuFor = null
-                            }
-                        )
+        topBar = {
+            TopAppBar(
+                title = { Text("Папка №$folderId") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onBlitz) {
+                        Icon(Icons.Default.Face, contentDescription = "Блиц-тест")
                     }
                 }
-            }
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = {
+                    editCard = Card(
+                        id = 0,
+                        folderId = folderId,
+                        question = "",
+                        answer = "",
+                        timerEnable = false,
+                        intervalSeconds = 0
+                    )
+                    isNew = true
+                },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Новая") }
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            if (cards.isEmpty()) {
+                Box(Modifier.fillMaxSize()) {
+                    Text("Карточек нет", Modifier.align(Alignment.Center))
+                }
+            } else {
+                cards.forEach { card ->
+                    // Локальная переменная flipped по id карточки
+                    var flipped by remember(card.id) { mutableStateOf(false) }
 
-            // Диалог новая/переименование
-            editFolder?.let { f ->
-                UniversalDialog(
-                    title   = if (isNew) "Новая папка" else "Переименовать папку",
-                    fields  = listOf(DialogField("name","Название",DialogFieldType.STRING,f.name)),
-                    onDismiss = { editFolder = null },
-                    onConfirm = { fields ->
-                        val name = (fields.first().initialValue as String).trim()
-                        if (name.isNotEmpty()) {
-                            if (isNew) viewModel.addFolder(name)
-                            else        viewModel.renameFolder(f.id, name)
+                    ListItem(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = { flipped = !flipped },
+                                onLongClick = { menuFor = card }
+                            ),
+                        headlineContent = {
+                            Text(
+                                text = if (!flipped) card.question else card.answer,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = if (!flipped) "⇅ Нажмите, чтобы увидеть ответ"
+                                else "⇅ Нажмите, чтобы вернуть вопрос",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                        editFolder = null
-                        menuFor = null
-                    }
-                )
+                    )
+                    Divider()
+
+                    CardCrudMenu(
+                        expanded = (menuFor == card),
+                        onDismiss = { menuFor = null },
+                        onEdit = {
+                            editCard = card
+                            isNew = false
+                        },
+                        onDelete = {
+                            viewModel.deleteCard(card)
+                            menuFor = null
+                        }
+                    )
+                }
             }
+        }
+
+        // Диалог создания/редактирования карточки
+        editCard?.let { c ->
+            UniversalDialog(
+                title = if (isNew) "Новая карточка" else "Редактировать карточку",
+                fields = listOf(
+                    DialogField("q","Вопрос", DialogFieldType.STRING,  c.question),
+                    DialogField("a","Ответ",   DialogFieldType.STRING,  c.answer),
+                    DialogField("t","Таймер",  DialogFieldType.BOOLEAN, c.timerEnable),
+                    DialogField("i","Интервал (сек)", DialogFieldType.TIME, c.intervalSeconds)
+                ),
+                onDismiss = { editCard = null },
+                onConfirm = { fields ->
+                    val q = fields.first { it.key == "q" }.initialValue as String
+                    val a = fields.first { it.key == "a" }.initialValue as String
+                    val t = fields.first { it.key == "t" }.initialValue as Boolean
+                    val i = fields.first { it.key == "i" }.initialValue as Int
+
+                    val newId = if (isNew) (cards.maxOfOrNull { it.id } ?: 0) + 1 else c.id
+                    val newCard = c.copy(
+                        id = newId,
+                        question = q,
+                        answer = a,
+                        timerEnable = t,
+                        intervalSeconds = i
+                    )
+
+                    if (isNew) viewModel.addCard(newCard)
+                    else viewModel.updateCard(newCard)
+
+                    editCard = null
+                    menuFor = null
+                }
+            )
         }
     }
 }

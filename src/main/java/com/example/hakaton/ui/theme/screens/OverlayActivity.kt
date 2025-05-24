@@ -1,16 +1,13 @@
-// OverlayActivity.kt
 package com.example.hakaton.ui.screens
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +19,6 @@ import com.example.hakaton.ui.theme.HakatonTheme
 import com.example.hakaton.ui.theme.LightBackgroundGradient
 import com.example.hakaton.ui.theme.view_model.MainViewModel
 import kotlin.random.Random
-import kotlin.math.min
 
 class OverlayActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels {
@@ -37,7 +33,7 @@ class OverlayActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    OverlayScreen(viewModel)
+                    OverlayScreen(viewModel = viewModel)
                 }
             }
         }
@@ -46,17 +42,16 @@ class OverlayActivity : ComponentActivity() {
 
 @Composable
 fun OverlayScreen(viewModel: MainViewModel) {
-    var cards by remember { mutableStateOf<List<Card>>(emptyList()) }
+    // вместо делегата — читаем .value
+    val cardsState = viewModel.cards.collectAsState()
+    val cards: List<Card> = cardsState.value
+
+    val context = LocalContext.current
+
     var showAnswer by remember { mutableStateOf(false) }
 
-    // Загрузка карточек
-    LaunchedEffect(Unit) {
-        viewModel.loadCards(1) // здесь folderId можно брать из intent
-        viewModel.cards.collect { list -> cards = list }
-    }
-
     Box(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(LightBackgroundGradient),
         contentAlignment = Alignment.Center
@@ -64,7 +59,6 @@ fun OverlayScreen(viewModel: MainViewModel) {
         if (cards.isEmpty()) {
             Text("Нет карточек для показа", style = MaterialTheme.typography.bodyLarge)
         } else {
-            // индекс случайной карточки
             val idx = Random.nextInt(cards.size)
             val card = cards[idx.coerceAtMost(cards.lastIndex)]
             Column(
@@ -85,8 +79,9 @@ fun OverlayScreen(viewModel: MainViewModel) {
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(onClick = {
-                    // Завершаем Activity
-                    (LocalContext.current as? ComponentActivity)?.finish()
+                    if (context is Activity) {
+                        context.finish()
+                    }
                 }) {
                     Text("Закрыть")
                 }

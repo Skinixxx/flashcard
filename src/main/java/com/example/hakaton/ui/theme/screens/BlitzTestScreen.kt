@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.hakaton.data.Card
 import com.example.hakaton.ui.theme.view_model.MainViewModel
+import kotlinx.coroutines.delay
 import kotlin.random.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -20,30 +21,32 @@ fun BlitzTestScreen(
     viewModel: MainViewModel,
     onFinish: () -> Unit
 ) {
-    // 1) загрузка всех карточек данной папки
+    // 1) Получаем карточки из VM
     val allCards by viewModel.cards.collectAsState()
     LaunchedEffect(folderId) { viewModel.loadCards(folderId) }
 
-    // экран: настройки или сам тест или результат
+    // фазы экрана
     var phase by remember { mutableStateOf(Phase.Settings) }
 
-    // настройки
+    // Параметры теста
     var countInput by remember { mutableStateOf("") }
     var useTimer by remember { mutableStateOf(false) }
     var timePerQuestion by remember { mutableStateOf("10") }
 
-    // внутри теста
+    // Состояние теста
     var deck by remember { mutableStateOf<List<Card>>(emptyList()) }
     var index by remember { mutableStateOf(0) }
     var flipped by remember { mutableStateOf(false) }
     var correctCount by remember { mutableStateOf(0) }
+
+    // Таймер
     var timeLeft by remember { mutableStateOf(0) }
     var timerRunning by remember { mutableStateOf(false) }
 
-    // когда начинается тест — формируем колоду и сбрасываем счётчики
-    if (phase == Phase.Start) {
-        LaunchedEffect(Unit) {
-            // фильтруем и перемешиваем нужное кол-во карт
+    // Запуск теста
+    LaunchedEffect(phase) {
+        if (phase == Phase.Testing) {
+            // формируем колоду
             val cnt = countInput.toIntOrNull()
                 ?.coerceIn(1, allCards.size)
                 ?: allCards.size
@@ -55,21 +58,22 @@ fun BlitzTestScreen(
                 timeLeft = timePerQuestion.toIntOrNull() ?: 10
                 timerRunning = true
             }
-            phase = Phase.Testing
         }
     }
 
-    // таймер
-    if (phase == Phase.Testing && useTimer && timerRunning) {
-        LaunchedEffect(index, timeLeft) {
-            if (timeLeft > 0) {
-                kotlinx.coroutines.delay(1000L)
+    // Отсчет таймера
+    LaunchedEffect(index, phase) {
+        if (phase == Phase.Testing && useTimer) {
+            timeLeft = timePerQuestion.toIntOrNull() ?: 10
+            while (timeLeft > 0) {
+                delay(1000)
                 timeLeft--
-            } else {
-                // время вышло — считаем как неправильный и переходим далее
-                timerRunning = false
+            }
+            // По окончании времени — переход
+            if (phase == Phase.Testing) {
                 if (index < deck.lastIndex) {
-                    index++; flipped = false; timerRunning = true
+                    index++
+                    flipped = false
                 } else {
                     phase = Phase.Result
                 }
@@ -79,7 +83,7 @@ fun BlitzTestScreen(
 
     when (phase) {
         Phase.Settings -> {
-            // --- Настройки теста ---
+            // экран настроек
             Column(
                 Modifier
                     .fillMaxSize()
@@ -91,14 +95,14 @@ fun BlitzTestScreen(
                 OutlinedTextField(
                     value = countInput,
                     onValueChange = { countInput = it.filter(Char::isDigit) },
-                    label = { Text("Кол-во вопросов (max ${allCards.size})") },
+                    label = { Text("Вопросов (max ${allCards.size})") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = useTimer, onCheckedChange = { useTimer = it })
                     Spacer(Modifier.width(8.dp))
-                    Text("Таймер на вопрос")
+                    Text("Таймер")
                 }
                 if (useTimer) {
                     OutlinedTextField(
@@ -109,57 +113,114 @@ fun BlitzTestScreen(
                         singleLine = true
                     )
                 }
-                Button(onClick = { phase = Phase.Start }) {
-                    Text("Начать тест")
+                Button(onClick = { phase = Phase.Testing }) {
+                    Text("Начать")
                 }
-                Spacer(Modifier.height(32.dp))
-                Button(onClick = onFinish, colors = ButtonDefaults.textButtonColors()) {
+                TextButton(onClick = onFinish) {
                     Text("Отмена")
                 }
             }
         }
         Phase.Testing -> {
-            // --- Показываем текущий вопрос / ответ ---
-            val card = deck[index]
+            // экран теста
+            val card = deck.getOrNull(index) ?: return
+            var userAnswer by remember { mutableStateOf("") }
+            var checkResult by remember { mutableStateOf<Boolean?>(null) }
+
+            LaunchedEffect(index) {
+                userAnswer = ""
+                checkResult = null
+            }
+
             Column(
                 Modifier
                     .fillMaxSize()
                     .padding(24.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // таймер
+                Text(
+                    text = "Вопрос: ${index + 1}/${deck.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
                 if (useTimer) {
                     Text("Осталось: $timeLeft сек", style = MaterialTheme.typography.bodyLarge)
                 }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    CardItemSimple(card, flipped) { flipped = !flipped }
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                // Блок вопроса и ответа
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Button(onClick = {
-                        // неверно
-                        nextQuestion(
-                            isLast = index == deck.lastIndex,
-                            onAdvance = { index++ ; flipped = false; timeLeft = timePerQuestion.toIntOrNull() ?: 10; timerRunning = true },
-                            onFinish = { phase = Phase.Result }
-                        )
-                    }) { Text("❌") }
-                    Button(onClick = {
-                        // верно
-                        correctCount++
-                        nextQuestion(
-                            isLast = index == deck.lastIndex,
-                            onAdvance = { index++ ; flipped = false; timeLeft = timePerQuestion.toIntOrNull() ?: 10; timerRunning = true },
-                            onFinish = { phase = Phase.Result }
-                        )
-                    }) { Text("✔️") }
+                    Text(card.question, style = MaterialTheme.typography.headlineSmall)
+
+                    OutlinedTextField(
+                        value = userAnswer,
+                        onValueChange = { userAnswer = it },
+                        label = { Text("Ваш ответ") },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = checkResult == null,
+                        isError = checkResult == false
+                    )
+
+                    if (checkResult != null) {
+                        Column {
+                            Text("Правильный ответ:", style = MaterialTheme.typography.bodySmall)
+                            Text(card.answer)
+                            Text(
+                                text = if (checkResult == true) "✅ Верно!" else "❌ Неверно",
+                                style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
+                            )
+                        }
+                    }
+                }
+
+                // Кнопки управления
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (checkResult == null) {
+                        Button(
+                            onClick = {
+                                // Проверка ответа
+                                val normalizedAnswer = userAnswer.trim().lowercase()
+                                val correctAnswer = card.answer.trim().lowercase()
+                                checkResult = normalizedAnswer == correctAnswer
+
+                                if (useTimer) timerRunning = false
+                            },
+                            enabled = userAnswer.isNotBlank()
+                        ) {
+                            Text("Проверить ответ")
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                if (checkResult == true) correctCount++
+
+                                if (index < deck.lastIndex) {
+                                    index++
+                                    flipped = false
+                                    if (useTimer) {
+                                        timeLeft = timePerQuestion.toIntOrNull() ?: 10
+                                        timerRunning = true
+                                    }
+                                } else {
+                                    phase = Phase.Result
+                                }
+                            }
+                        ) {
+                            Text("Следующий вопрос →")
+                        }
+                    }
                 }
             }
         }
         Phase.Result -> {
-            // --- Результат ---
+            // экран результата
             Column(
                 Modifier
                     .fillMaxSize()
@@ -176,38 +237,8 @@ fun BlitzTestScreen(
                 }
             }
         }
-
-        Phase.Start -> TODO()
     }
 }
 
-private fun nextQuestion(isLast: Boolean, onAdvance: () -> Unit, onFinish: () -> Unit) {
-    if (isLast) onFinish() else onAdvance()
-}
+private enum class Phase { Settings, Testing, Result }
 
-@Composable
-private fun CardItemSimple(
-    card: Card,
-    flipped: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .padding(8.dp)
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                if (!flipped) card.question else card.answer,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(16.dp)
-            )
-        }
-    }
-}
-
-private enum class Phase { Settings, Start, Testing, Result }

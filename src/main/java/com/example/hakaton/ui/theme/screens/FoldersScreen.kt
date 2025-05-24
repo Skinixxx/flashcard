@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.hakaton.data.Folder
 import com.example.hakaton.ui.theme.DialogField
@@ -35,33 +36,30 @@ fun FoldersScreen(
     var menuFor by remember { mutableStateOf<Folder?>(null) }
     var editFolder by remember { mutableStateOf<Folder?>(null) }
     var isNew by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
-        viewModel.loadFolders()
-    }
+    LaunchedEffect(Unit) { viewModel.loadFolders() }
 
-    // отфильтрованный список
     val folders = remember(allFolders, query) {
-        if (query.isBlank()) allFolders
-        else allFolders.filter {
+        if (query.isBlank()) allFolders else allFolders.filter {
             it.name.contains(query.trim(), ignoreCase = true)
-        }
-    }
-
-    // nullable-слот навигационной иконки
-    val navIcon: (@Composable () -> Unit)? = onBack?.let { back ->
-        @Composable {
-            IconButton(onClick = back) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
-            }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { "Папки" },
-                navigationIcon = navIcon
+                title = { Text("Папки") },
+                navigationIcon = {
+                    // даже если onBack==null, этот блок отрисуется, но ничего не покажет
+                    onBack?.let {backAction ->
+                        @Composable{
+                            IconButton(onClick = backAction) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                            }
+                        }
+                    }
+                }
             )
         },
         floatingActionButton = {
@@ -120,7 +118,10 @@ fun FoldersScreen(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer
                             )
                         ) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
                                     folder.name,
                                     style = MaterialTheme.typography.bodyLarge,
@@ -132,11 +133,18 @@ fun FoldersScreen(
                             expanded = menuFor == folder,
                             onDismiss = { menuFor = null },
                             onEdit = {
-                                editFolder = folder
-                                isNew = false
+                                editFolder = folder; isNew = false
                             },
                             onDelete = {
-                                viewModel.deleteFolder(folder.id)
+                                viewModel.deleteFolder(folder.id); menuFor = null
+                            },
+                            onSchedule = {
+
+                                // Запускаем планирование для всех карточек папки
+                                viewModel.scheduleFolderReview(
+                                    folderId = folder.id,
+                                    context = context
+                                )
                                 menuFor = null
                             }
                         )
@@ -148,9 +156,7 @@ fun FoldersScreen(
         editFolder?.let { f ->
             UniversalDialog(
                 title = if (isNew) "Новая папка" else "Переименовать папку",
-                fields = listOf(
-                    DialogField("name", "Название", DialogFieldType.STRING, f.name)
-                ),
+                fields = listOf(DialogField("name", "Название", DialogFieldType.STRING, f.name)),
                 onDismiss = { editFolder = null },
                 onConfirm = { fields ->
                     val name = (fields.first { it.key == "name" }.initialValue as String).trim()
@@ -158,8 +164,7 @@ fun FoldersScreen(
                         if (isNew) viewModel.addFolder(name)
                         else viewModel.renameFolder(f.id, name)
                     }
-                    editFolder = null
-                    menuFor = null
+                    editFolder = null; menuFor = null
                 }
             )
         }

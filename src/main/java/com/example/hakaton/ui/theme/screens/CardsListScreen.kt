@@ -13,5 +13,5 @@ fun CardsListScreen(
     folderId: Int,
     viewModel: MainViewModel
 ) {
-    CardsScreen(folderId = folderId, viewModel = viewModel)
+    CardsScreen(viewModel = viewModel, onBack = {})
 }

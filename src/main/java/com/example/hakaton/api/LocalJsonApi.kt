@@ -45,6 +45,7 @@ class LocalJsonApi(context: Context) {
     suspend fun getCards(folderId: Int) = load(cardsFile, ListSerializer(Card.serializer()))
         .filter { it.folderId==folderId }
     suspend fun getAllCards() = load(cardsFile, ListSerializer(Card.serializer()))
+
     private suspend fun saveAllCards(list: List<Card>) = save(cardsFile, list, ListSerializer(Card.serializer()))
     suspend fun addCard(card: Card) {
         val all = getAllCards().toMutableList()

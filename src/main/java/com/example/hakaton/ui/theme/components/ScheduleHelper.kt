@@ -10,58 +10,54 @@ import android.os.SystemClock
 import androidx.annotation.RequiresPermission
 
 object ScheduleHelper {
+    fun scheduleOverlay(
+        context: Context,
+        cardId: Int,
+        delaySec: Int
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, OverlayReceiver::class.java).apply {
+            putExtra("cardId", cardId)
+        }
 
-    /**
-     * Запланировать одноразное уведомление через delayMillis миллисекунд.
-     */
-    fun scheduleReminder(context: Context, delayMillis: Long) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderReceiver::class.java)
-        val pi = PendingIntent.getBroadcast(
+        val pendingIntent = PendingIntent.getBroadcast(
             context,
-            0,
+            cardId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val triggerAt = System.currentTimeMillis() + delayMillis
-        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+
+        val triggerTime = SystemClock.elapsedRealtime() + delaySec * 1000L
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            }
+        } else {
+            alarmManager.setExact(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
+        }
     }
 
-    /**
-     * Отменяет все запланированные напоминания.
-     */
-    fun cancelAll(context: Context) {
-        val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderReceiver::class.java)
-        val pi = PendingIntent.getBroadcast(
+    fun cancelReminder(context: Context, cardId: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, OverlayReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
             context,
-            0,
+            cardId,
             intent,
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )
-        pi?.let { am.cancel(it) }
-
-        @RequiresPermission(Manifest.permission.SCHEDULE_EXACT_ALARM)
-        fun scheduleOverlay(context: Context, folderIds: IntArray, delaySec: Long) {
-            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val intent = Intent(context, OverlayReceiver::class.java).apply {
-                putExtra("folderIds", folderIds)
-            }
-
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val triggerAt = SystemClock.elapsedRealtime() + delaySec * 1000L
-
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                triggerAt,
-                pendingIntent
-            )
+        pendingIntent?.let {
+            alarmManager.cancel(it)
+            it.cancel()
         }
     }
 }

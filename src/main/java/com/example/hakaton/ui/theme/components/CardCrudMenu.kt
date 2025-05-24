@@ -10,7 +10,8 @@ fun CardCrudMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onSchedule: () -> Unit,
 ) {
     DropdownMenu(
         expanded          = expanded,
@@ -24,5 +25,12 @@ fun CardCrudMenu(
             onDelete()
             onDismiss()
         })
+        DropdownMenuItem(
+            text = { Text("Запланировать") },
+            onClick = {
+                onSchedule()
+                onDismiss()
+            }
+        )
     }
 }

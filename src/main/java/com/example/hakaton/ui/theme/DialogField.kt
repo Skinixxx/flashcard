@@ -1,17 +1,27 @@
 // DialogField.kt
 package com.example.hakaton.ui.theme
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import kotlin.reflect.KClass
 
-// Типы полей, которые мы поддерживаем
 enum class DialogFieldType { STRING, BOOLEAN, TIME }
 
-// Описание одного поля диалога
 data class DialogField<T>(
     val key: String,
     val label: String,
@@ -19,12 +29,6 @@ data class DialogField<T>(
     val initialValue: T
 )
 
-/**
- * UniversalDialog — универсальный диалог, который:
- *  • Показывает набор полей, заданных в `fields`
- *  • Хранит внутреннее состояние в `stateMap`
- *  • При нажатии OK возвращает обновлённый список DialogField с новыми значениями
- */
 @Composable
 fun UniversalDialog(
     title: String,
@@ -32,91 +36,112 @@ fun UniversalDialog(
     onDismiss: () -> Unit,
     onConfirm: (List<DialogField<*>>) -> Unit
 ) {
-    // Состояния всех полей по их ключу
+    // stateMap хранит текущее значение каждого поля
     val stateMap = remember {
-        mutableStateMapOf<String, Any?>().apply {
-            fields.forEach { put(it.key, it.initialValue) }
+        mutableStateMapOf<String, Any?>().also { map ->
+            fields.forEach { map[it.key] = it.initialValue }
         }
     }
 
+    fun <T : Any> getValue(key: String, cls: KClass<T>): T =
+        (stateMap[key] as? T) ?: throw IllegalStateException("Wrong type for $key")
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(title, style = MaterialTheme.typography.headlineSmall) },
         text = {
-            Column(Modifier.fillMaxWidth()) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 fields.forEach { field ->
                     Spacer(Modifier.height(8.dp))
                     when (field.type) {
                         DialogFieldType.STRING -> {
-                            // Берём строку или пустую строку
-                            val v = stateMap[field.key] as? String ?: ""
+                            val v = getValue(field.key, String::class)
                             OutlinedTextField(
                                 value = v,
                                 onValueChange = { stateMap[field.key] = it },
                                 label = { Text(field.label) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                         DialogFieldType.BOOLEAN -> {
-                            // Берём булево или false
-                            val c = stateMap[field.key] as? Boolean ?: false
+                            val v = getValue(field.key, Boolean::class)
                             Row(
-                                Modifier.fillMaxWidth(),
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { stateMap[field.key] = !v },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
-                                    checked = c,
+                                    checked = v,
                                     onCheckedChange = { stateMap[field.key] = it }
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Text(field.label)
+                                Text(field.label, Modifier.padding(start = 8.dp))
                             }
                         }
                         DialogFieldType.TIME -> {
-                            // Всегда приводим к строке
-                            val raw = stateMap[field.key]
-                            val s = when (raw) {
-                                is String -> raw
-                                is Number -> raw.toString()
-                                else       -> raw?.toString() ?: ""
-                            }
+                            // храним число секунд
+                            val num = getValue(field.key, Number::class).toInt()
+                            var text by remember { mutableStateOf(num.toString()) }
+                            LaunchedEffect(num) { text = num.toString() }
                             OutlinedTextField(
-                                value = s,
+                                value = text,
                                 onValueChange = {
-                                    // Оставляем только цифры
-                                    stateMap[field.key] = it.filter(Char::isDigit)
+                                    val filtered = it.filter(Char::isDigit)
+                                    text = filtered
+                                    stateMap[field.key] = filtered.toIntOrNull() ?: 0
                                 },
                                 label = { Text(field.label) },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("0") }
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                visualTransformation = NumberTransformation(),
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                // Собираем поле с новыми значениями
-                val updated = fields.map { f ->
-                    when (f.type) {
-                        DialogFieldType.STRING ->
-                            DialogField(f.key, f.label, f.type, stateMap[f.key] as String)
-                        DialogFieldType.BOOLEAN ->
-                            DialogField(f.key, f.label, f.type, stateMap[f.key] as Boolean)
-                        DialogFieldType.TIME ->
-                            DialogField(f.key, f.label, f.type, stateMap[f.key] as String)
+                // собираем новые поля в том же порядке
+                val result = fields.map { field ->
+                    when (field.type) {
+                        DialogFieldType.STRING -> DialogField(
+                            field.key, field.label, field.type,
+                            getValue(field.key, String::class)
+                        )
+                        DialogFieldType.BOOLEAN -> DialogField(
+                            field.key, field.label, field.type,
+                            getValue(field.key, Boolean::class)
+                        )
+                        DialogFieldType.TIME -> DialogField(
+                            field.key, field.label, field.type,
+                            getValue(field.key, Number::class).toInt()
+                        )
                     }
                 }
-                onConfirm(updated)
+                onConfirm(result)
             }) {
-                Text("OK")
+                Text("Подтвердить")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Отмена")
             }
         }
     )
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+private class NumberTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        TransformedText(AnnotatedString(text.text.filter { it.isDigit() }), OffsetMapping.Identity)
 }

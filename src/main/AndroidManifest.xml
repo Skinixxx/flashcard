@@ -27,9 +27,15 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".utils.ReminderReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".ui.screens.OverlayActivity"
-            android:exported="true"/>
+            android:exported="true"
+            android:launchMode="singleTask"
+            />
     </application>
 
 </manifest>

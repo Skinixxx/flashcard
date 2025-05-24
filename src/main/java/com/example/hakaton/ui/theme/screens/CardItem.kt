@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.hakaton.data.Card
 import com.example.hakaton.ui.theme.*
@@ -27,12 +29,14 @@ fun CardItem(
     card: Card,
     onUpdate: (Card) -> Unit,
     onDelete: (Card) -> Unit,
+    onSchedule: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var flipped by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var editCard by remember { mutableStateOf<Card?>(null) }
     val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f)
+    var showScheduleDialog by remember { mutableStateOf(false) }
 
     // Градиент для фона карточки
     val bgBrush = Brush.verticalGradient(
@@ -121,6 +125,23 @@ fun CardItem(
                 onDelete(card)
             }
         )
+        DropdownMenuItem(
+            text = { Text("Запланировать") },
+            onClick = {
+                menuExpanded = false
+                showScheduleDialog = true
+            }
+        )
+
+        if (showScheduleDialog) {
+            ScheduleDialog(
+                onDismiss = { showScheduleDialog = false },
+                onConfirm = { seconds ->
+                    onSchedule(seconds)
+                }
+            )
+        }
+
     }
 
     // Диалог редактирования карточки
@@ -152,3 +173,45 @@ fun CardItem(
 }
 
 
+@Composable
+fun ScheduleDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (seconds: Int) -> Unit
+) {
+    var timeInput by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Запланировать повторение") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = timeInput,
+                    onValueChange = { timeInput = it.filter { c -> c.isDigit() } },
+                    label = { Text("Время в секундах") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Через сколько секунд показать карточку?")
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val seconds = timeInput.toIntOrNull() ?: 0
+                    if (seconds > 0) {
+                        onConfirm(seconds)
+                    }
+                    onDismiss()
+                }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        }
+    )
+}

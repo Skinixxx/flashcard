@@ -18,5 +18,6 @@ data class Card(
     val question: String,
     val answer: String,
     val timerEnable: Boolean = false,
+    val scheduledTime: Long =0,
     val intervalSeconds: Int = 0
 )

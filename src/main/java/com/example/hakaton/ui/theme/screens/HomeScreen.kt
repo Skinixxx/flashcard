@@ -28,83 +28,63 @@ import androidx.navigation.compose.rememberNavController
 import com.example.hakaton.ui.theme.LightBackgroundGradient
 import com.example.hakaton.ui.theme.components.AppNavHost
 import com.example.hakaton.ui.theme.screens.BlitzTestScreen
+import com.example.hakaton.ui.theme.screens.CardsListScreen
+import com.example.hakaton.ui.theme.screens.CardsScreen
 import com.example.hakaton.ui.theme.screens.FolderScreen
 import com.example.hakaton.ui.theme.screens.FoldersScreen
 import com.example.hakaton.ui.theme.view_model.MainViewModel
 import com.google.accompanist.pager.ExperimentalPagerApi
 import kotlinx.coroutines.launch
 
+
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPagerApi::class)
 @Composable
 fun HomeScreen(
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    navController: NavHostController // Добавляем navController в параметры
 ) {
-    val folders by viewModel.folders.collectAsState()
-    val pagerState = rememberPagerState(
-        initialPage = 0,
-        pageCount = TODO()
-    )
+    val folders = viewModel.folders.collectAsState().value
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        modifier = Modifier.background(LightBackgroundGradient),
         topBar = {
-            TopAppBar(title = { Text("Flashcards") })
-        },
-        // FAB оставляем пустым: в каждом экране будет свой
-        floatingActionButton = {}
+            TopAppBar(
+                title = { Text("Flashcards") },
+                actions = {
+                    IconButton(onClick = {
+                        navController.navigate("settings") // Пример использования навигации
+                    }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                }
+            )
+        }
     ) { padding ->
-        HorizontalPager(
-            beyondViewportPageCount = 3,
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) { page ->
+        HorizontalPager(state = pagerState) { page ->
             when (page) {
-                // 0 — список папок
                 0 -> FoldersScreen(
                     viewModel = viewModel,
                     onFolderClick = { folderId ->
-                        // При выборе папки переключаемся на страницу 1
-                        scope.launch { pagerState.animateScrollToPage(1) }
-                        viewModel.loadCards(folderId)
+                        // Используем навигацию вместо переключения страниц
+                        navController.navigate("folder/$folderId")
                     },
-                    onBack = null // на корневом экране кнопки «назад» нет
+                    onBack = { navController.popBackStack() }
                 )
 
-                // 1 — экран конкретной папки с карточками
-                1 -> {
-                    // Если нет папок — показываем заглушку
-                    if (folders.isEmpty()) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Папки не найдены", style = MaterialTheme.typography.bodyLarge)
-                        }
-                    } else {
-                        val folderId = folders.first()
-                        FolderScreen(
-                            folderId  = folderId,
-                            viewModel  = viewModel,
-                            onBack     = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            onBlitz    = { scope.launch { pagerState.animateScrollToPage(2) } }
-                        )
-                    }
-                }
+                1 -> CardsScreen(
 
-                // 2 — блиц-тест
-                2 -> {
-                    if (folders.isNotEmpty()) {
-                        val folderId = folders.first()
-                        BlitzTestScreen(
-                            folderId  = folderId,
-                            viewModel  = viewModel,
-                            onFinish   = { scope.launch { pagerState.animateScrollToPage(1) } }
-                        )
-                    } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("Нет папок для теста", style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() }
+                )
+
+                2 -> BlitzTestScreen(
+                    folderId = viewModel.selectedFolderId,
+                    viewModel = viewModel,
+                    onFinish = { navController.popBackStack() }
+                )
             }
         }
     }
